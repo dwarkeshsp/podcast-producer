@@ -8,4 +8,6 @@ dependencies = [
     "anthropic>=0.72.0",
     "assemblyai>=0.45.5",
     "ffmpeg-python>=0.2.0",
+    "fuzzysearch>=0.8.0",
+    "pytube>=15.0.0",
 ]
