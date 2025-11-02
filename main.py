@@ -13,7 +13,7 @@ You are writing tweets in the style of top intellectual podcaster, Dwarkesh Pate
 Here's my sense of what makes tweets great:
 It's very helpful when you frame a very specific question or motivation or hook that you're going to answer.
 
-Your task: Identify 3 of the most compelling segments to make clips of.
+Your task: Identify 8 of the most compelling segments to make clips of.
 
 You can create non-consecutive clips by cutting out parts in the middle, or even rearranging segments. 
 And you can define the start and end of the segment wherever you like. 
@@ -81,20 +81,18 @@ clip_suggestion_examples = [
 ]
 
 
-def get_claude_response(prompt):
+def get_claude_response(prompt, thinking=True):
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
     response = client.messages.create(
         model="claude-sonnet-4-5",
-        max_tokens=8000,
-        thinking={"type": "enabled", "budget_tokens": 1024},
+        max_tokens=16000,
+        thinking={"type": "enabled" if thinking else "disabled", "budget_tokens": 1024},
         messages=[{"role": "user", "content": [{"type": "text", "text": prompt}]}],
     )
 
     for block in response.content:
         if block.type == "thinking":
             print("Thinking: ", block.thinking)
-        elif block.type == "text":
-            print("Response: ", block.text)
     return response.content[-1].text.strip()
 
 
@@ -108,6 +106,10 @@ def get_readable_transcript(transcript_data):
         transcript += f"{utt['text']}\n"
     return transcript
 
+def response_to_json(response):
+    json_start = response.find("```json") + len("```json")
+    json_end = response.find("```", json_start)
+    return json.loads(response[json_start:json_end])
 
 def suggest_clips(transcript_data):
     readable_transcript = get_readable_transcript(transcript_data)
@@ -117,26 +119,22 @@ def suggest_clips(transcript_data):
         examples=examples_json, transcript=readable_transcript
     )
     response = get_claude_response(full_prompt)
-    json_start = response.find("```json") + len("```json")
-    json_end = response.find("```", json_start)
-
-    clip_suggestions = json.loads(response[json_start:json_end])
+    clip_suggestions = response_to_json(response)
     return clip_suggestions
 
 
 def segment_transcript_to_timestamps(segment_transcript, transcript_data):
+    """Find timestamps for a segment of transcript text."""
     words = transcript_data["words"]
     segment_words = segment_transcript.lower().split()
     transcript_words = [w["text"].lower() for w in words]
 
-    best_ratio = 0
-    best_start = 0
+    best_ratio, best_start = 0, 0
     window_size = len(segment_words)
 
     for i in range(len(transcript_words) - window_size + 1):
         window = transcript_words[i : i + window_size]
         ratio = SequenceMatcher(None, segment_words, window).ratio()
-
         if ratio > best_ratio:
             best_ratio = ratio
             best_start = i
@@ -148,18 +146,62 @@ def segment_transcript_to_timestamps(segment_transcript, transcript_data):
     start_ms = words[best_start]["start"]
     end_ms = words[best_start + window_size - 1]["end"]
 
-    print(
-        f"Match: '{words[best_start]['text']}' ... '{words[best_start + window_size - 1]['text']}'"
-    )
-    print(
-        f"Time: {start_ms / 1000:.2f}s - {end_ms / 1000:.2f}s (confidence: {best_ratio:.2%})"
-    )
-
     return start_ms, end_ms
 
 
-def render_twitter_clip(timestamps):
-    pass
+def generate_hook_name(tweet_text):
+    prompt = f"""Generate a short filename (2-4 words, snake_case) for this tweet. Don't include the guest name.
+    Tweet: {tweet_text}
+    Return ONLY the filename without .mp4 extension. Example: rl_terrible"""
+
+    hook = get_claude_response(prompt, thinking=False).strip().lower()
+    hook = "".join(c if c.isalnum() or c == "_" else "_" for c in hook)
+    hook = "_".join(hook.split("_")[:5])
+    return hook
+
+
+def extract_segment(video_path, start_ms, duration_ms, output_path):
+    """Extract a single segment with square crop."""
+    input_stream = ffmpeg.input(str(video_path), ss=start_ms / 1000, t=duration_ms / 1000)
+    video = input_stream.video.filter("crop", "min(iw,ih)", "min(iw,ih)")
+    audio = input_stream.audio
+    (
+        ffmpeg.output(video, audio, str(output_path), vcodec="libx264", acodec="aac")
+        .overwrite_output()
+        .run(capture_stdout=True, capture_stderr=True)
+    )
+
+
+def render_clip(video_path, timestamps, output_path):
+    """Render clip from timestamps."""
+    temp_dir = output_path.parent / "temp"
+    temp_dir.mkdir(exist_ok=True)
+
+    # Extract all segments
+    temp_files = []
+    for idx, ts in enumerate(timestamps):
+        temp_file = temp_dir / f"seg_{idx}.mp4"
+        extract_segment(video_path, ts["start_ms"], ts["duration_ms"], temp_file)
+        temp_files.append(temp_file)
+
+    # Concatenate
+    concat_file = temp_dir / "concat.txt"
+    with open(concat_file, "w") as f:
+        for temp_file in temp_files:
+            f.write(f"file '{temp_file.resolve()}'\n")
+
+    (
+        ffmpeg.input(str(concat_file), format="concat", safe=0)
+        .output(str(output_path), c="copy")
+        .overwrite_output()
+        .run(capture_stdout=True, capture_stderr=True)
+    )
+
+    # Cleanup
+    for f in temp_files:
+        f.unlink()
+    concat_file.unlink()
+    temp_dir.rmdir()
 
 
 def save_transcript_json(transcript_data: dict, json_path: str):
@@ -174,16 +216,20 @@ def load_transcript_json(json_path: str) -> dict:
         return json.load(f)
 
 
-def transcribe(vid_path):
-    json_path = f"data/transcripts/{vid_path.stem}.json"
-    if os.path.exists(json_path):
-        print(f"Loading existing transcript from {json_path}")
-        return load_transcript_json(json_path)
+def transcribe(episode_dir):
+    """Transcribe video.mp4 in episode directory."""
+    video_path = episode_dir / "video.mp4"
+    transcript_path = episode_dir / "transcript.json"
 
-    print(f"Generating new transcript for {vid_path}")
-    audio_path = "data/temp_audio.wav"
-    ffmpeg.input(vid_path).output(
-        audio_path, acodec="pcm_s16le", ar="16000"
+    if transcript_path.exists():
+        print("Loading existing transcript")
+        return load_transcript_json(str(transcript_path))
+
+    print("Generating new transcript")
+    audio_path = episode_dir / "temp_audio.wav"
+
+    ffmpeg.input(str(video_path)).output(
+        str(audio_path), acodec="pcm_s16le", ar="16000"
     ).overwrite_output().run(capture_stdout=True, capture_stderr=True)
 
     aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
@@ -191,38 +237,125 @@ def transcribe(vid_path):
         speaker_labels=True,
         speech_models=["slam-1"],
     )
-    aai_transcript = aai.Transcriber().transcribe(audio_path, config=config)
+    aai_transcript = aai.Transcriber().transcribe(str(audio_path), config=config)
     transcript_data = aai_transcript.json_response
-    save_transcript_json(transcript_data, json_path)
-    os.remove(audio_path)
+    save_transcript_json(transcript_data, str(transcript_path))
+    audio_path.unlink()
     return transcript_data
 
 
-def prep():
-    os.makedirs("data", exist_ok=True)
-    os.makedirs("data/episodes", exist_ok=True)
-    os.makedirs("data/transcripts", exist_ok=True)
-    os.makedirs("data/clips", exist_ok=True)
+def get_timestamps_for_segments(segment_transcripts, transcript_data):
+    """Convert segment transcripts to timestamps."""
+    timestamps = []
+    for segment_transcript in segment_transcripts:
+        start_ms, end_ms = segment_transcript_to_timestamps(
+            segment_transcript, transcript_data
+        )
+        if start_ms is not None:
+            timestamps.append({
+                "start_ms": start_ms,
+                "end_ms": end_ms,
+                "duration_ms": end_ms - start_ms,
+            })
+    return timestamps
+
+
+def save_clip_files(clips_dir, hook, suggestion, timestamps):
+    """Save clip tweet text and metadata."""
+    tweet_path = clips_dir / f"{hook}_tweet.txt"
+    metadata_path = clips_dir / f"{hook}_metadata.json"
+
+    with open(tweet_path, "w", encoding="utf-8") as f:
+        f.write(suggestion["tweet_text"])
+
+    metadata = {
+        "hook": hook,
+        "tweet_text": suggestion["tweet_text"],
+        "segment_transcripts": suggestion["segment_transcripts"],
+        "timestamps": timestamps,
+    }
+    with open(metadata_path, "w", encoding="utf-8") as f:
+        json.dump(metadata, f, indent=2, ensure_ascii=False)
+
+    return clips_dir / f"{hook}.mp4"
+
+
+def process_clip(suggestion, transcript_data, video_path, clips_dir, idx, total):
+    timestamps = get_timestamps_for_segments(
+        suggestion["segment_transcripts"], transcript_data
+    )
+
+    hook = generate_hook_name(suggestion["tweet_text"])
+    clip_path = save_clip_files(clips_dir, hook, suggestion, timestamps)
+    render_clip(video_path, timestamps, clip_path)
+
+
+def iterate_on_clip(episode_name, hook, feedback):
+    episode_dir = Path("episodes") / episode_name
+    clips_dir = episode_dir / "clips"
+    metadata_path = clips_dir / f"{hook}_metadata.json"
+
+    with open(metadata_path, "r", encoding="utf-8") as f:
+        metadata = json.load(f)
+
+    prompt = f"""You previously created this clip suggestion:
+    Tweet text:
+    {metadata['tweet_text']}
+    Segment transcripts (exact quotes from the podcast):
+    {json.dumps(metadata['segment_transcripts'], indent=2)}
+    The user has this feedback:
+    {feedback}
+    Please provide an updated clip suggestion that addresses this feedback.
+    Return ONLY a JSON object (no markdown code fences) with this structure:
+    {{
+    "tweet_text": "...",
+    "segment_transcripts": ["...", "..."]
+    }}
+    Remember: segment_transcripts must be EXACT quotes from the original transcript."""
+
+    response = get_claude_response(prompt)
+    updated_suggestion = response_to_json(response)
+
+    transcript_data = load_transcript_json(str(episode_dir / "transcript.json"))
+    video_path = episode_dir / "video.mp4"
+
+    timestamps = get_timestamps_for_segments(
+        updated_suggestion["segment_transcripts"], transcript_data
+    )
+
+    clip_path = save_clip_files(clips_dir, hook, updated_suggestion, timestamps)
+    render_clip(video_path, timestamps, clip_path)
 
 
 def main():
-    prep()
     parser = argparse.ArgumentParser()
-    parser.add_argument("video_path", type=str, help="The path to the full episode")
+    parser.add_argument("episode_name", help="Episode name (e.g., 'karpathy')")
+    parser.add_argument("--iterate", help="Hook name of clip to iterate on")
+    parser.add_argument("--feedback", help="Feedback for iteration")
     args = parser.parse_args()
 
-    video_path = Path(args.video_path)
+    # Iteration mode
+    if args.iterate:
+        if not args.feedback:
+            print("Error: --feedback required when using --iterate")
+            return
+        iterate_on_clip(args.episode_name, args.iterate, args.feedback)
+        return
 
-    transcript_data = transcribe(video_path)
+    # Normal clip generation mode
+    episode_dir = Path("episodes") / args.episode_name
+    clips_dir = episode_dir / "clips"
+    clips_dir.mkdir(parents=True, exist_ok=True)
+
+    video_path = episode_dir / "video.mp4"
+    transcript_data = transcribe(episode_dir)
+
     clip_suggestions = suggest_clips(transcript_data)
-    for clip_suggestion in clip_suggestions:
-        timestamps = []
-        for segment_transcript in clip_suggestion["segment_transcripts"]:
-            start_ms, end_ms = segment_transcript_to_timestamps(
-                segment_transcript, transcript_data
-            )
-            timestamps.append((start_ms, end_ms))
-            print(start_ms, end_ms)
+
+    for idx, suggestion in enumerate(clip_suggestions, 1):
+        process_clip(
+            suggestion, transcript_data, video_path, clips_dir, idx, len(clip_suggestions)
+        )
 
 
 if __name__ == "__main__":
