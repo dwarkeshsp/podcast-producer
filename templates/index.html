@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clip Review - {{ episode_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Podcast Clip Review</h1>
+            <h2>{{ episode_name }}</h2>
+        </header>
+
+        <section class="clip-section">
+            <h3>Draft Clips ({{ draft_clips|length }})</h3>
+            {% if draft_clips %}
+                <ul class="clip-list">
+                    {% for clip in draft_clips %}
+                    <li>
+                        <a href="{{ url_for('view_clip', hook=clip.hook) }}">
+                            <div class="clip-item">
+                                <span class="clip-name">{{ clip.hook }}</span>
+                                <span class="clip-meta">{{ "%.0f"|format(clip.duration) }}s • {{ clip.num_segments }} segments</span>
+                            </div>
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="empty">No draft clips</p>
+            {% endif %}
+        </section>
+
+        <section class="clip-section">
+            <h3>✓ Approved Clips ({{ approved_clips|length }})</h3>
+            {% if approved_clips %}
+                <ul class="clip-list">
+                    {% for clip in approved_clips %}
+                    <li>
+                        <a href="{{ url_for('view_clip', hook=clip.hook) }}">
+                            <div class="clip-item approved">
+                                <span class="clip-name">{{ clip.hook }}</span>
+                                <span class="clip-meta">{{ "%.0f"|format(clip.duration) }}s • {{ clip.num_segments }} segments</span>
+                            </div>
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="empty">No approved clips yet</p>
+            {% endif %}
+        </section>
+    </div>
+</body>
+</html>
+
