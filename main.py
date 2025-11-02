@@ -4,6 +4,7 @@ import anthropic
 import os
 import ffmpeg
 import json
+import re
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -107,9 +108,17 @@ def get_readable_transcript(transcript_data):
     return transcript
 
 def response_to_json(response):
-    json_start = response.find("```json") + len("```json")
-    json_end = response.find("```", json_start)
-    return json.loads(response[json_start:json_end])
+    """Parse JSON from response, handling markdown-wrapped or raw JSON."""
+    response = re.sub(r'```json\s*', '', response)
+    response = re.sub(r'```\s*', '', response)
+    response = response.strip()
+    
+    # Find JSON object if embedded in text
+    json_match = re.search(r'\{.*\}', response, re.DOTALL)
+    if json_match:
+        response = json_match.group()
+    
+    return json.loads(response)
 
 def suggest_clips(transcript_data):
     readable_transcript = get_readable_transcript(transcript_data)
@@ -299,19 +308,27 @@ def iterate_on_clip(episode_name, hook, feedback):
         metadata = json.load(f)
 
     prompt = f"""You previously created this clip suggestion:
-    Tweet text:
-    {metadata['tweet_text']}
-    Segment transcripts (exact quotes from the podcast):
-    {json.dumps(metadata['segment_transcripts'], indent=2)}
-    The user has this feedback:
-    {feedback}
-    Please provide an updated clip suggestion that addresses this feedback.
-    Return ONLY a JSON object (no markdown code fences) with this structure:
-    {{
-    "tweet_text": "...",
-    "segment_transcripts": ["...", "..."]
-    }}
-    Remember: segment_transcripts must be EXACT quotes from the original transcript."""
+
+Tweet text:
+{metadata['tweet_text']}
+
+Segment transcripts (exact quotes from the podcast):
+{json.dumps(metadata['segment_transcripts'], indent=2)}
+
+The user has this feedback:
+{feedback}
+
+Please provide an updated clip suggestion that addresses this feedback.
+Return your response as a JSON object with this structure:
+
+```json
+{{
+  "tweet_text": "...",
+  "segment_transcripts": ["...", "..."]
+}}
+```
+
+CRITICAL: segment_transcripts must be EXACT quotes from the original transcript, word-for-word."""
 
     response = get_claude_response(prompt)
     updated_suggestion = response_to_json(response)

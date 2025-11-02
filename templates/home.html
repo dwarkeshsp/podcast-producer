@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Podcast Clip Producer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="main-header">
+            <h1>🎙️ Podcast Clip Producer</h1>
+            <p>Generate and review Twitter clips from your podcast episodes</p>
+        </header>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="flash flash-{{ category }}">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <section class="episodes-section">
+            {% if episodes %}
+                {% for episode in episodes %}
+                <div class="episode-card">
+                    <div class="episode-header">
+                        <h2>📁 {{ episode.name }}</h2>
+                        {% if not episode.has_video %}
+                        <span class="badge badge-error">No video</span>
+                        {% endif %}
+                    </div>
+                    
+                    {% if episode.has_clips %}
+                        <div class="episode-stats">
+                            <span>✓ {{ episode.clip_count }} clips</span>
+                            <span class="stat-detail">({{ episode.draft_count }} draft, {{ episode.approved_count }} approved)</span>
+                        </div>
+                        <div class="episode-actions">
+                            <a href="{{ url_for('episode_clips', episode_name=episode.name) }}" class="btn btn-primary">View Clips</a>
+                            <form method="POST" action="{{ url_for('generate_clips', episode_name=episode.name) }}" style="display: inline;" onsubmit="return confirm('Regenerate all clips? This will overwrite existing clips.');">
+                                <button type="submit" class="btn btn-secondary">Regenerate</button>
+                            </form>
+                        </div>
+                    {% else %}
+                        {% if episode.has_video %}
+                            <p class="episode-status">⚠ No clips yet</p>
+                            <div class="episode-actions">
+                                <form method="POST" action="{{ url_for('generate_clips', episode_name=episode.name) }}" onsubmit="showLoading(this)">
+                                    <button type="submit" class="btn btn-primary">Generate Clips</button>
+                                </form>
+                            </div>
+                        {% else %}
+                            <p class="episode-status">❌ Add video.mp4 to episodes/{{ episode.name }}/</p>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <h3>No episodes found</h3>
+                    <p>Create a directory in <code>episodes/</code> and add <code>video.mp4</code></p>
+                    <p>Example: <code>episodes/karpathy/video.mp4</code></p>
+                </div>
+            {% endif %}
+        </section>
+    </div>
+
+    <div id="loading-overlay" style="display: none;">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <h2>Generating clips...</h2>
+            <p>This may take several minutes</p>
+            <p class="loading-detail">Transcribing → Generating suggestions → Rendering clips</p>
+        </div>
+    </div>
+
+    <script>
+        function showLoading(form) {
+            document.getElementById('loading-overlay').style.display = 'flex';
+            return true;
+        }
+    </script>
+</body>
+</html>
+

@@ -8,15 +8,15 @@
     <div class="container">
         <header>
             <div class="compact-header">
-                <a href="{{ url_for('index') }}" class="back-link">← List</a>
+                <a href="{{ url_for('episode_clips', episode_name=episode_name) }}" class="back-link">← List</a>
                 <span class="clip-title">{{ hook }} ({{ current }}/{{ total }})</span>
                 <div class="header-actions">
                     {% if prev_hook %}
-                    <a href="{{ url_for('view_clip', hook=prev_hook) }}" class="nav-arrow">←</a>
+                    <a href="{{ url_for('view_clip', episode_name=episode_name, hook=prev_hook) }}" class="nav-arrow">←</a>
                     {% endif %}
                     <span class="status-badge status-{{ metadata.status }}">{{ metadata.status|upper }}</span>
                     {% if next_hook %}
-                    <a href="{{ url_for('view_clip', hook=next_hook) }}" class="nav-arrow">→</a>
+                    <a href="{{ url_for('view_clip', episode_name=episode_name, hook=next_hook) }}" class="nav-arrow">→</a>
                     {% endif %}
                 </div>
             </div>
@@ -25,7 +25,7 @@
         <div class="clip-view">
             <div class="video-section">
                 <video controls autoplay loop>
-                    <source src="{{ url_for('serve_video', hook=hook) }}" type="video/mp4">
+                    <source src="{{ url_for('serve_video', episode_name=episode_name, hook=hook) }}" type="video/mp4">
                 </video>
                 
                 <button type="button" class="transcript-toggle" onclick="toggleTranscript()">
@@ -44,7 +44,7 @@
 
             <div class="tweet-section">
                 <h3>Tweet Text</h3>
-                <form method="POST" action="{{ url_for('save_tweet', hook=hook) }}">
+                <form method="POST" action="{{ url_for('save_tweet', episode_name=episode_name, hook=hook) }}">
                     <textarea name="tweet_text" rows="12">{{ metadata.tweet_text }}</textarea>
                     <button type="submit" class="btn btn-secondary">Save Tweet Text</button>
                 </form>
@@ -54,7 +54,7 @@
                 </div>
 
                 <h3>Give Feedback</h3>
-                <form method="POST" action="{{ url_for('iterate', hook=hook) }}">
+                <form method="POST" action="{{ url_for('iterate', episode_name=episode_name, hook=hook) }}" onsubmit="showLoadingOverlay(event)">
                     <textarea name="feedback" rows="3" placeholder="e.g., Remove the middle segment, make tweet shorter..."></textarea>
                     <button type="submit" class="btn btn-secondary">Update Clip</button>
                 </form>
@@ -63,7 +63,7 @@
 
         <div class="approve-section">
             {% if metadata.status == "draft" %}
-            <form method="POST" action="{{ url_for('approve', hook=hook) }}">
+            <form method="POST" action="{{ url_for('approve', episode_name=episode_name, hook=hook) }}">
                 <button type="submit" class="btn btn-primary">Approve & Schedule</button>
             </form>
             {% else %}
@@ -72,7 +72,21 @@
         </div>
     </div>
 
+    <div id="loading-overlay" style="display: none;">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <h2>Updating clip...</h2>
+            <p>This may take a few minutes</p>
+        </div>
+    </div>
+
     <script>
+        // Show loading overlay
+        function showLoadingOverlay(event) {
+            document.getElementById('loading-overlay').style.display = 'flex';
+            return true;
+        }
+
         // Toggle transcript segments
         function toggleTranscript() {
             const segments = document.getElementById('transcript-segments');
@@ -92,9 +106,9 @@
             if (e.target.tagName === 'TEXTAREA') return;
             
             if (e.key === 'ArrowLeft' && '{{ prev_hook }}') {
-                window.location.href = "{{ url_for('view_clip', hook=prev_hook) if prev_hook else '#' }}";
+                window.location.href = "{{ url_for('view_clip', episode_name=episode_name, hook=prev_hook) if prev_hook else '#' }}";
             } else if (e.key === 'ArrowRight' && '{{ next_hook }}') {
-                window.location.href = "{{ url_for('view_clip', hook=next_hook) if next_hook else '#' }}";
+                window.location.href = "{{ url_for('view_clip', episode_name=episode_name, hook=next_hook) if next_hook else '#' }}";
             } else if (e.key === ' ') {
                 e.preventDefault();
                 const video = document.querySelector('video');

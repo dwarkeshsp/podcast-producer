@@ -15,38 +15,37 @@ export ANTHROPIC_API_KEY="your_key"
 
 ## Usage
 
-### 1. Generate Clips
+### Start the Web UI
 
 ```bash
-# Add your video to episodes/{name}/video.mp4
+uv run review.py
+```
+
+Opens at `http://localhost:5000` - Everything can be done from the UI!
+
+### From the UI you can:
+
+1. **View all episodes** - See all episodes in `episodes/` directory
+2. **Generate clips** - Click "Generate Clips" for any episode with video.mp4
+3. **Review clips** - View, edit, and approve clips
+4. **Iterate** - Give feedback to regenerate specific clips
+
+### Adding a New Episode
+
+```bash
 mkdir -p episodes/karpathy
 cp /path/to/video.mp4 episodes/karpathy/video.mp4
+```
 
-# Generate clips
+Then click "Generate Clips" in the UI!
+
+### CLI Usage (Optional)
+
+```bash
+# Generate clips via CLI
 uv run main.py karpathy
-```
 
-This will:
-- Transcribe the video (or load existing transcript)
-- Generate 8 clip suggestions with Claude
-- Render clips as square videos with tweet text
-
-### 2. Review Clips
-
-```bash
-uv run review.py karpathy
-```
-
-Opens a web interface at `http://localhost:5000` where you can:
-- View all draft and approved clips
-- Watch clips alongside tweet text
-- Edit tweet text directly
-- Give feedback to regenerate clips
-- Approve clips for scheduling
-
-### 3. Iterate on a Clip (CLI)
-
-```bash
+# Iterate on a specific clip
 uv run main.py karpathy --iterate hook_name --feedback "Remove middle segment"
 ```
 

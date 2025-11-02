@@ -7,6 +7,7 @@
 <body>
     <div class="container">
         <header>
+            <a href="{{ url_for('home') }}" class="back-link">← Home</a>
             <h1>Podcast Clip Review</h1>
             <h2>{{ episode_name }}</h2>
         </header>
@@ -17,7 +18,7 @@
                 <ul class="clip-list">
                     {% for clip in draft_clips %}
                     <li>
-                        <a href="{{ url_for('view_clip', hook=clip.hook) }}">
+                        <a href="{{ url_for('view_clip', episode_name=episode_name, hook=clip.hook) }}">
                             <div class="clip-item">
                                 <span class="clip-name">{{ clip.hook }}</span>
                                 <span class="clip-meta">{{ "%.0f"|format(clip.duration) }}s • {{ clip.num_segments }} segments</span>
@@ -37,7 +38,7 @@
                 <ul class="clip-list">
                     {% for clip in approved_clips %}
                     <li>
-                        <a href="{{ url_for('view_clip', hook=clip.hook) }}">
+                        <a href="{{ url_for('view_clip', episode_name=episode_name, hook=clip.hook) }}">
                             <div class="clip-item approved">
                                 <span class="clip-name">{{ clip.hook }}</span>
                                 <span class="clip-meta">{{ "%.0f"|format(clip.duration) }}s • {{ clip.num_segments }} segments</span>
