@@ -27,9 +27,18 @@
                 <video controls autoplay loop>
                     <source src="{{ url_for('serve_video', hook=hook) }}" type="video/mp4">
                 </video>
-                <div class="video-info">
-                    <p>Duration: {{ "%.1f"|format(metadata.timestamps|sum(attribute='duration_ms')/1000) }}s</p>
-                    <p>Segments: {{ metadata.segment_transcripts|length }}</p>
+                
+                <button type="button" class="transcript-toggle" onclick="toggleTranscript()">
+                    <span id="toggle-icon">▼</span> View Segments
+                </button>
+                
+                <div id="transcript-segments" class="transcript-segments" style="display: none;">
+                    {% for segment in metadata.segment_transcripts %}
+                    <div class="segment">
+                        <div class="segment-header">Segment {{ loop.index }}</div>
+                        <div class="segment-text">{{ segment }}</div>
+                    </div>
+                    {% endfor %}
                 </div>
             </div>
 
@@ -64,6 +73,20 @@
     </div>
 
     <script>
+        // Toggle transcript segments
+        function toggleTranscript() {
+            const segments = document.getElementById('transcript-segments');
+            const icon = document.getElementById('toggle-icon');
+            
+            if (segments.style.display === 'none') {
+                segments.style.display = 'block';
+                icon.textContent = '▲';
+            } else {
+                segments.style.display = 'none';
+                icon.textContent = '▼';
+            }
+        }
+
         // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
             if (e.target.tagName === 'TEXTAREA') return;

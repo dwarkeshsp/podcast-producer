@@ -189,6 +189,58 @@ video {
     margin: 3px 0;
 }
 
+.transcript-toggle {
+    width: 100%;
+    margin-top: 15px;
+    padding: 10px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    color: #374151;
+    font-size: 0.9em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.transcript-toggle:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+}
+
+.transcript-segments {
+    margin-top: 15px;
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: #fafafa;
+}
+
+.segment {
+    padding: 15px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.segment:last-child {
+    border-bottom: none;
+}
+
+.segment-header {
+    font-weight: 600;
+    font-size: 0.85em;
+    color: #6b7280;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.segment-text {
+    font-size: 0.9em;
+    line-height: 1.6;
+    color: #374151;
+}
+
 .tweet-section {
     background: white;
     padding: 20px;
